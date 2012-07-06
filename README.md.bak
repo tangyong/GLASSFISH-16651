@@ -20,16 +20,4 @@ Note: because currently, fighterfish project is not integrated in GFv4's main, y
 
 5 setting the value of "glassfish.osgi.start.level.final" into 3 in glassfish3\glassfish\config\osgi.properties file.
 
-6 executing "asadmin start-domain"
-
-7 executing "asadmin deploy --type=wab e:\test_sample1.war?Web-ContextPath=/test_sample1"
-
-8 From Browser, you can access "http://localhost:8080/test_sample1/"
-
-"Hello! Servlet3.0 Sample1111111111" 
-
-Note:test_sample1.war is in testsample directory.
-
-ToDo:
-
-Need to discuss the modify way and using way with GF's leader -->Sahoo
+6 
