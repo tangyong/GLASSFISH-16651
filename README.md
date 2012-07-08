@@ -22,7 +22,26 @@ Note: because currently, fighterfish project is not integrated in GFv4's main, y
 
 6 executing "asadmin start-domain"
 
-7 executing "asadmin deploy --type=wab e:\test_sample1.war?Web-ContextPath=/test_sample1"
+7 On the current prototype implementation, user can using the following
+way to deploy a wab and launch the wab successfully:
+
+1) asadmin deploy --type=osgi
+e:\test_sample1.war?Web-ContextPath=/test_sample1
+
+In the original test_sample1.war's Manifest.MF, not containing any
+osgi-related metadata.
+
+2) asadmin deploy --type=osgi e:\test_sample2.war
+
+In the original test_sample2.war's Manifest.MF, not containing any
+osgi-related metadata other than "Web-ContextPath" metadata.
+
+3) asadmin deploy --type=osgi
+e:\test_sample3.war?Web-ContextPath=/test_sample4
+
+In the original test_sample3.war's Manifest.MF, only containing
+"Web-ContextPath: /test_sample3" metadata. However, /test_sample4 will
+rewrite  /test_sample3.
 
 8 From Browser, you can access "http://localhost:8080/test_sample1/"
 
