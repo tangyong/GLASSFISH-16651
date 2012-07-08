@@ -100,6 +100,7 @@ public class DeploymentContextImpl implements ExtendedDeploymentContext, PreDest
     
     //TangYong
     URL webbundleurl = null; 
+    boolean isWAB = false;
 
     /** Creates a new instance of DeploymentContext */
     public DeploymentContextImpl(Deployment.DeploymentContextBuilder builder, ServerEnvironment env) {
@@ -139,7 +140,16 @@ public class DeploymentContextImpl implements ExtendedDeploymentContext, PreDest
     
     public URL getWEBBundleURL() {
         return this.webbundleurl;
+    }
+    
+    public void setWABFlag(boolean isWab) {
+        this.isWAB = isWab;
+    }
+    
+    public boolean getWABFlag() {
+        return this.isWAB;
     }//end
+    
 
     public <U extends OpsParams> U getCommandParameters(Class<U> commandParametersType) {
         try {

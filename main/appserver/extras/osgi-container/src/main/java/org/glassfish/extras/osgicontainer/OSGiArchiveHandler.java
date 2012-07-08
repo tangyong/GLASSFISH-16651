@@ -44,9 +44,11 @@ import org.glassfish.api.deployment.archive.*;
 import org.glassfish.api.deployment.DeploymentContext;
 import org.glassfish.deployment.common.DeploymentContextImpl;
 import org.glassfish.internal.deployment.GenericHandler;
+import org.glassfish.internal.api.DelegatingClassLoader;
 import org.glassfish.osgiweb.WebBundleURLStreamHandlerService;
 import org.jvnet.hk2.annotations.Service;
 import org.jvnet.hk2.annotations.Scoped;
+import org.jvnet.hk2.component.PreDestroy;
 import org.jvnet.hk2.component.Singleton;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleReference;
@@ -56,67 +58,106 @@ import org.osgi.service.url.URLStreamHandlerService;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.*;
+import java.net.URL;
+import java.net.URI;
 import java.net.URLConnection;
+import java.lang.ref.WeakReference;
+
+import com.sun.enterprise.module.ModulesRegistry;
+import com.sun.enterprise.module.Module;
+import com.sun.enterprise.module.ModuleDefinition;
+import com.sun.enterprise.module.common_impl.DefaultModuleDefinition;
 import com.sun.enterprise.util.io.FileUtils;
 
 import javax.inject.Inject;
 
 /**
  * Archive Handler for OSGi modules.
- *
- * @author tangyong@cn.fujitsu.com
+ * 
+ * @author Jerome Dochez
  */
-@Service(name=OSGiWABArchiveDetector.OSGI_ARCHIVE_TYPE)
+@Service(name = OSGiArchiveDetector.OSGI_ARCHIVE_TYPE)
 @Scoped(Singleton.class)
-public class OSGiWABArchiveHandler extends GenericHandler implements CompositeHandler {
+public class OSGiArchiveHandler extends GenericHandler implements
+		CompositeHandler {
 
-    @Inject
-    private OSGiWABArchiveDetector detector;
+	@Inject
+	private OSGiArchiveDetector detector;
 
-    public String getArchiveType() {
-        return OSGiWABArchiveDetector.OSGI_ARCHIVE_TYPE;
-    }
+	public String getArchiveType() {
+		return OSGiArchiveDetector.OSGI_ARCHIVE_TYPE;
+	}
 
-    public boolean accept(ReadableArchive source, String entryName) {
-        // we hide everything so far.
-        return false;
-    }
+	public boolean accept(ReadableArchive source, String entryName) {
+		// we hide everything so far.
+		return false;
+	}
 
-    public boolean handles(ReadableArchive archive) throws IOException {
-        return detector.handles(archive);
-    }
+	public boolean handles(ReadableArchive archive) throws IOException {
+		return detector.handles(archive);
+	}
 
-    public ClassLoader getClassLoader(ClassLoader parent, DeploymentContext context) {
-        return parent;
-    }
+	public ClassLoader getClassLoader(ClassLoader parent,
+			DeploymentContext context) {
+		return parent;
+	}
 
-    public String getDefaultApplicationName(ReadableArchive archive,
-        DeploymentContext context) {
-        return getDefaultApplicationNameFromArchiveName(archive);
-    }
-    
-    /***
-     * from osgi registry get org.glassfish.osgiweb.WebBundleURLStreamHandlerService,
-     * and handle war's Manifest.
-     */
-    @Override
-    public void expand(ReadableArchive source, WritableArchive target,
-            DeploymentContext context) throws IOException {
+	public String getDefaultApplicationName(ReadableArchive archive,
+			DeploymentContext context) {
+		return getDefaultApplicationNameFromArchiveName(archive);
+	}
 
-    	    BundleContext osgicontext = getBundleContext();
-  
-    	    URLStreamHandlerService urlhandler  = null;
-    	    try {
-				ServiceReference[] urlhandlers = osgicontext.getServiceReferences(URLStreamHandlerService.class.getName(), null);
+	/***
+	 * from osgi registry get
+	 * org.glassfish.osgiweb.WebBundleURLStreamHandlerService, and handle war's
+	 * Manifest.
+	 * 
+	 * @author tangyong@cn.fujitsu.com
+	 */
+	@Override
+	public void expand(ReadableArchive source, WritableArchive target,
+			DeploymentContext context) throws IOException {
+
+		Enumeration<String> e = source.entries();
+		while (e.hasMoreElements()) {
+			String entryName = e.nextElement();
+
+			InputStream is = new BufferedInputStream(source.getEntry(entryName));
+			OutputStream os = null;
+			try {
+				os = target.putNextEntry(entryName);
+				FileUtils.copy(is, os, source.getEntrySize(entryName));
+			} finally {
+				if (os != null) {
+					target.closeEntry();
+				}
+				is.close();
+			}
+		}
+
+		// last is manifest is existing.
+	    // Manifest m = source.getManifest();
+		Manifest m = source.getManifest();
+		JarInputStream jis = null;
+		
+		boolean isWAB = ((DeploymentContextImpl) context).getWABFlag();
+		if (isWAB){
+			BundleContext osgicontext = getBundleContext();
+			URLStreamHandlerService urlhandler = null;
+			try {
+				ServiceReference[] urlhandlers = osgicontext.getServiceReferences(
+						URLStreamHandlerService.class.getName(), null);
 				for (ServiceReference r : urlhandlers) {
-					urlhandler = (URLStreamHandlerService)osgicontext.getService(r);
-					if (urlhandler instanceof WebBundleURLStreamHandlerService){						
+					urlhandler = (URLStreamHandlerService) osgicontext
+							.getService(r);
+					if (urlhandler instanceof WebBundleURLStreamHandlerService) {
 						break;
 					}
 				}
@@ -124,42 +165,28 @@ public class OSGiWABArchiveHandler extends GenericHandler implements CompositeHa
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-    	    
-    	    URLConnection conn = urlhandler.openConnection(((DeploymentContextImpl)context).getWEBBundleURL());
-    	    
-            Enumeration<String> e = source.entries();
-            while (e.hasMoreElements()) {
-                String entryName = e.nextElement();
-                
-                InputStream is = new BufferedInputStream(source.getEntry(entryName));
-                OutputStream os = null;
-                try {
-                    os = target.putNextEntry(entryName);
-                    FileUtils.copy(is, os, source.getEntrySize(entryName));
-                } finally {
-                    if (os!=null) {
-                        target.closeEntry();
-                    }
-                    is.close();
-                }
-            }
 
-            // last is manifest is existing.
-            //Manifest m = source.getManifest();
-            JarInputStream jis = new JarInputStream(conn.getInputStream());
-            Manifest m = jis.getManifest();
-            if (m!=null) {
-                OutputStream os  = target.putNextEntry(JarFile.MANIFEST_NAME);
-                m.write(os);
-                target.closeEntry();
-            }
-            
-            jis.close();
+			URLConnection conn = urlhandler
+					.openConnection(((DeploymentContextImpl) context)
+							.getWEBBundleURL());
+			
+			jis = new JarInputStream(conn.getInputStream());
+		    m = jis.getManifest();
+		}
+		
+		if (m != null) {
+			OutputStream os = target.putNextEntry(JarFile.MANIFEST_NAME);
+			m.write(os);
+			target.closeEntry();
+		}
+		
+		if (jis != null){
+		   jis.close();
+		}
+	}
 
-        }
-    
-    private BundleContext getBundleContext() {
-        return BundleReference.class.cast(getClass().getClassLoader()).getBundle().getBundleContext();
-    }
-
+	private BundleContext getBundleContext() {
+		return BundleReference.class.cast(getClass().getClassLoader())
+				.getBundle().getBundleContext();
+	}
 }

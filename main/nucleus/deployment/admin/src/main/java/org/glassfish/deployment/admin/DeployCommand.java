@@ -80,6 +80,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.jar.Attributes;
+import java.util.jar.Attributes.Name;
+import java.util.jar.JarInputStream;
+import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -190,12 +194,41 @@ public class DeployCommand extends DeployCommandParameters implements AdminComma
         String waburlpath = "";
         URL waburl = null;
         URL embeddedURL = null;
+        boolean isWAB = false;
        
-        if (type.equals("wab")){        	
-        	try { 
-        		waburl = new URL("webbundle",null,path.toURL().toExternalForm());
-				embeddedURL = new URL(waburl.getPath());
-				path = new File(embeddedURL.getPath());		
+        if (type.equals("osgi")){        	
+        	try {
+        		URL url = path.toURL();
+        		String webcpvalue = readQueryParams(url.getQuery()).get("Web-ContextPath");
+        		
+        		if (webcpvalue != null){
+        			isWAB = true;
+        		}else{
+        			 try {
+        				String str = url.getPath();
+        	
+						final JarInputStream jis = new JarInputStream(new URL("file",null,str).openStream());
+						Manifest manifest = jis.getManifest();
+						if (manifest != null ){
+							Attributes attrs = manifest.getMainAttributes();
+							String value = attrs.getValue("Web-ContextPath");
+							if ( value != null){
+								isWAB = true;
+							}
+							path = new File(str + "?Web-ContextPath=" + value);
+						}
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+        		}
+        		        		
+        		if(isWAB){
+        			waburl = new URL("webbundle",null,path.toURL().toExternalForm());
+    				embeddedURL = new URL(waburl.getPath());
+    				path = new File(embeddedURL.getPath());		
+        		}
+        		
 			} catch (MalformedURLException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -273,8 +306,7 @@ public class DeployCommand extends DeployCommandParameters implements AdminComma
 
             boolean isUntagged = VersioningUtils.isUntagged(name);
             // no GlassFish versioning support for OSGi budles
-            //TangYong --> type.equals("wab")
-            if ( name != null && !isUntagged && type != null && (type.equals("osgi") || type.equals("wab")) ) {
+            if ( name != null && !isUntagged && type != null && (type.equals("osgi")) ) {
                 ActionReport.MessagePart msgPart = context.getActionReport().getTopMessagePart();
                 msgPart.setChildrenType("WARNING");
                 ActionReport.MessagePart childPart = msgPart.addChild();
@@ -373,6 +405,8 @@ public class DeployCommand extends DeployCommandParameters implements AdminComma
 
             //TangYong
             ((DeploymentContextImpl)initialContext).setWEBBundleURL(waburl);
+            ((DeploymentContextImpl)initialContext).setWABFlag(isWAB);
+            //end TangYong
             
             // create the parent class loader
             deploymentContext =
@@ -441,11 +475,7 @@ public class DeployCommand extends DeployCommandParameters implements AdminComma
             if (type==null) {
                 appInfo = deployment.deploy(deploymentContext);
             } else {
-            	if(type.equals("wab")){
-            		appInfo = deployment.deploy(deployment.prepareSniffersForOSGiDeployment("osgi", deploymentContext), deploymentContext);
-            	}else{
                 appInfo = deployment.deploy(deployment.prepareSniffersForOSGiDeployment(type, deploymentContext), deploymentContext);
-            	}
             }
 
             /*
@@ -900,5 +930,32 @@ public class DeployCommand extends DeployCommandParameters implements AdminComma
          * @param context of the deployment
          */
         void intercept(DeployCommand self, DeploymentContext context);
+    }
+    
+    //Tang Yong Added
+    private static Map<String, String> readQueryParams(String query)
+    {
+        Map<String, String> queryParams = new HashMap<String, String>();
+        if (query != null)
+        {
+            StringTokenizer st = new StringTokenizer(query, "&");
+            while (st.hasMoreTokens())
+            {
+                String next = st.nextToken();
+                int eq = next.indexOf("=");
+                String name = next, value = null;
+                if (eq != -1)
+                {
+                    name = next.substring(0, eq);
+                    if ((eq + 1) < next.length())
+                    {
+                        value = next.substring(eq + 1);
+                    }
+                }
+               
+                queryParams.put(name, value);
+            }
+        }
+        return queryParams;
     }
 }
