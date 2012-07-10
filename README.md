@@ -12,11 +12,11 @@ Using Way:
 1 build fighterfish\module\osgi-javaee-base and osgi-web-container 
 Note: because currently, fighterfish project is not integrated in GFv4's main, you must pay attention to some settings in pom files.
 
-2 build main\appserver\extras\osgi-container and main\nucleus\deployment\admin and main\nucleus\deployment\common using my modified files.
+2 build main\appserver\extras\osgi-container using my modified files.
 
 3 copy built osgi-javaee-base.jar and osgi-web-container.jar to glassfish3\glassfish\modules\autostart directory
 
-4 copy built deployment-common.jar and deployment-admin.jar and osgi-container.jar to  glassfish3\glassfish\modules  directory
+4 copy built osgi-container.jar  to  glassfish3\glassfish\modules  directory
 
 5 setting the value of "glassfish.osgi.start.level.final" into 3 in glassfish3\glassfish\config\osgi.properties file.
 
@@ -25,8 +25,7 @@ Note: because currently, fighterfish project is not integrated in GFv4's main, y
 7 On the current prototype implementation, user can using the following
 way to deploy a wab and launch the wab successfully:
 
-1) asadmin deploy --type=osgi
-e:\test_sample1.war?Web-ContextPath=/test_sample1
+1) asadmin deploy --type=osgi --properties Web-ContextPath=/test_sample1 e:\test_sample1.war
 
 In the original test_sample1.war's Manifest.MF, not containing any
 osgi-related metadata.
@@ -51,4 +50,4 @@ Note:test_sample1.war is in testsample directory.
 
 ToDo:
 
-Need to discuss the modify way and using way with GF's leader -->Sahoo
+Continue to discuss the modify way and using way with GF's leader -->Sahoo

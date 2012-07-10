@@ -41,8 +41,8 @@
 package org.glassfish.extras.osgicontainer;
 
 import org.glassfish.api.deployment.archive.*;
+import org.glassfish.api.deployment.DeployCommandParameters;
 import org.glassfish.api.deployment.DeploymentContext;
-import org.glassfish.deployment.common.DeploymentContextImpl;
 import org.glassfish.internal.deployment.GenericHandler;
 import org.glassfish.internal.api.DelegatingClassLoader;
 import org.glassfish.osgiweb.WebBundleURLStreamHandlerService;
@@ -58,7 +58,6 @@ import org.osgi.service.url.URLStreamHandlerService;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.jar.JarFile;
@@ -66,7 +65,6 @@ import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.*;
 import java.net.URL;
-import java.net.URI;
 import java.net.URLConnection;
 import java.lang.ref.WeakReference;
 
@@ -147,8 +145,29 @@ public class OSGiArchiveHandler extends GenericHandler implements
 		Manifest m = source.getManifest();
 		JarInputStream jis = null;
 		
-		boolean isWAB = ((DeploymentContextImpl) context).getWABFlag();
+        boolean isWAB = false;  
+        String wcp = null;
+        Properties props = context.getCommandParameters(DeployCommandParameters.class).properties;
+        if (props != null){
+        	wcp = props.getProperty("Web-ContextPath");
+        }
+               
+		if (wcp != null){
+			isWAB = true;
+		}else{
+			//according to jar file to judge WAB
+			wcp = source.getManifest().getMainAttributes().getValue("Web-ContextPath");
+			if (wcp != null){
+				isWAB = true;
+			}
+		}
+
 		if (isWAB){
+			
+			//construct wab url using webbundle schema
+			String wabpath =  source.getURI().toURL().toExternalForm() + "?Web-ContextPath=" + wcp;
+			URL waburl = new URL("webbundle",null, wabpath);
+						
 			BundleContext osgicontext = getBundleContext();
 			URLStreamHandlerService urlhandler = null;
 			try {
@@ -167,8 +186,7 @@ public class OSGiArchiveHandler extends GenericHandler implements
 			}
 
 			URLConnection conn = urlhandler
-					.openConnection(((DeploymentContextImpl) context)
-							.getWEBBundleURL());
+					.openConnection(waburl);
 			
 			jis = new JarInputStream(conn.getInputStream());
 		    m = jis.getManifest();
