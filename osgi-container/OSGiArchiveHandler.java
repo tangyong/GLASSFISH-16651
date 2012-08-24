@@ -51,13 +51,15 @@ import com.sun.enterprise.util.io.FileUtils;
 import javax.inject.Singleton;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.Enumeration;
 import java.util.Properties;
-import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
@@ -66,47 +68,49 @@ import javax.inject.Inject;
 
 /**
  * Archive Handler for OSGi modules.
- *
+ * 
  * @author Jerome Dochez
  * @author Tang Yong (tangyong@cn.fujitsu.com)
  */
-@Service(name=OSGiArchiveDetector.OSGI_ARCHIVE_TYPE)
+@Service(name = OSGiArchiveDetector.OSGI_ARCHIVE_TYPE)
 @Singleton
-public class OSGiArchiveHandler extends GenericHandler implements CompositeHandler {
+public class OSGiArchiveHandler extends GenericHandler implements
+		CompositeHandler {
 
-    @Inject
-    private OSGiArchiveDetector detector;
+	@Inject
+	private OSGiArchiveDetector detector;
 
-    public String getArchiveType() {
-        return OSGiArchiveDetector.OSGI_ARCHIVE_TYPE;
-    }
+	public String getArchiveType() {
+		return OSGiArchiveDetector.OSGI_ARCHIVE_TYPE;
+	}
 
-    public boolean accept(ReadableArchive source, String entryName) {
-        // we hide everything so far.
-        return false;
-    }
+	public boolean accept(ReadableArchive source, String entryName) {
+		// we hide everything so far.
+		return false;
+	}
 
-    public void initCompositeMetaData(DeploymentContext context) {
-        // nothing to initialize
-    }
+	public void initCompositeMetaData(DeploymentContext context) {
+		// nothing to initialize
+	}
 
-    public boolean handles(ReadableArchive archive) throws IOException {
-        return detector.handles(archive);
-    }
+	public boolean handles(ReadableArchive archive) throws IOException {
+		return detector.handles(archive);
+	}
 
-    public ClassLoader getClassLoader(ClassLoader parent, DeploymentContext context) {
-        return parent;
-    }
+	public ClassLoader getClassLoader(ClassLoader parent,
+			DeploymentContext context) {
+		return parent;
+	}
 
-    public String getDefaultApplicationName(ReadableArchive archive,
-        DeploymentContext context) {
-        return getDefaultApplicationNameFromArchiveName(archive);
-    }
-    
-    /**
-	 * Override the expand method of base class(GenericHandler) in order to support
-	 * allowing wrapping of non-OSGi bundles when --type=osgi option is used in deploy 
-	 * command or GUI.
+	public String getDefaultApplicationName(ReadableArchive archive,
+			DeploymentContext context) {
+		return getDefaultApplicationNameFromArchiveName(archive);
+	}
+
+	/**
+	 * Override the expand method of base class(GenericHandler) in order to
+	 * support allowing wrapping of non-OSGi bundles when --type=osgi option is
+	 * used in deploy command or GUI.
 	 * 
 	 * @param source
 	 *            of the expanding
@@ -119,22 +123,27 @@ public class OSGiArchiveHandler extends GenericHandler implements CompositeHandl
 	 */
 	@Override
 	public void expand(ReadableArchive source, WritableArchive target,
-			DeploymentContext context) throws IOException {		
-		Properties props = context.getCommandParameters(DeployCommandParameters.class).properties;
+			DeploymentContext context) throws IOException {
+		Properties props = context
+				.getCommandParameters(DeployCommandParameters.class).properties;
 		if ((props != null) && (props.containsKey("uriScheme"))) {
-			
+
 			// see [GLASSFISH-16651]
-			// if uriScheme is webbundle, we need to construct a new URL based on
+			// if uriScheme is webbundle, we need to construct a new URL based
+			// on
 			// user's input and souce parameter and call openStream() on it.
 			// user's input can be the following:
-			// asadmin deploy --properties uriScheme=webBundle:Bundle-SymbolicName=foo:
-			//         Import-Package=javax.servlet:Web-ContextPath=/foo /tmp/foo.war
+			// asadmin deploy --properties
+			// uriScheme=webBundle:Bundle-SymbolicName=foo:
+			// Import-Package=javax.servlet:Web-ContextPath=/foo /tmp/foo.war
 			Enumeration<?> p = props.propertyNames();
 			StringBuilder sb = new StringBuilder();
 
 			sb.append(props.getProperty("uriScheme"));
 			sb.append(":");
-			sb.append(context.getOriginalSource().getURI().toURL().toExternalForm() + "?");
+			sb.append(context.getOriginalSource().getURI().toURL()
+					.toExternalForm()
+					+ "?");
 
 			while (p.hasMoreElements()) {
 				String key = (String) p.nextElement();
@@ -148,49 +157,79 @@ public class OSGiArchiveHandler extends GenericHandler implements CompositeHandl
 			}
 
 			String urlStr = sb.toString();
-			if (urlStr.charAt(urlStr.length()-1)=='&')
-			{
-			   urlStr = urlStr.substring(0, urlStr.length()-1);
+			if (urlStr.charAt(urlStr.length() - 1) == '&') {
+				urlStr = urlStr.substring(0, urlStr.length() - 1);
 			}
 
 			URL url = new URL(urlStr);
-			JarInputStream jis = new JarInputStream(url.openStream());
-			
-			//Add All Files Other Than MANIFEST File To Target and Write Them To Target
-			//Using Source Object
-			Enumeration<String> e = source.entries();
-	        while (e.hasMoreElements()) {
-	            String entryName = e.nextElement();
-	            InputStream is = new BufferedInputStream(source.getEntry(entryName));
-	            OutputStream os = null;
-	            try {
-	                os = target.putNextEntry(entryName);
-	                FileUtils.copy(is, os, source.getEntrySize(entryName));
-	            } finally {
-	                if (os!=null) {
-	                    target.closeEntry();
-	                }
-	                is.close();
-	            }
-	        }
-	        
-	        //Add MANIFEST File To Target and Write the MANIFEST File To Target
-	        Manifest m = null;
-	        m = jis.getManifest();
-	        if (m != null){
-	        	OutputStream os = null;
-	        	try{
-	        		os = target.putNextEntry(JarFile.MANIFEST_NAME);			
-		  			m.write(os);
-	        	}finally{
-	        		if (os!=null) {
-	                    target.closeEntry();
-	                }
-	        	}	        	
-	        }			
-			jis.close();
-		}else{
+			URLConnection conn = null;
+			InputStream is = null;
+			int BUFSIZE = 4096;
+			ByteArrayOutputStream baos = new ByteArrayOutputStream(BUFSIZE);
+			JarInputStream jis = null;
+
+			try {
+				conn = url.openConnection();
+				is = conn.getInputStream();
+				copyStreamToFile(is, baos, BUFSIZE);
+				jis = new JarInputStream(new ByteArrayInputStream(
+						baos.toByteArray()));
+
+				Enumeration<String> e = source.entries();
+				while (e.hasMoreElements()) {
+					String entryName = e.nextElement();
+					InputStream bis = new BufferedInputStream(
+							source.getEntry(entryName));
+					OutputStream os = null;
+					try {
+						os = target.putNextEntry(entryName);
+						FileUtils.copy(bis, os, source.getEntrySize(entryName));
+					} finally {
+						if (os != null) {
+							target.closeEntry();
+						}
+						bis.close();
+					}
+				}
+
+				//Add MANIFEST File To Target and Write the MANIFEST File To Target
+				Manifest m = null;
+				m = jis.getManifest();
+				if (m != null) {
+					OutputStream os = null;
+					try {
+						os = target.putNextEntry(JarFile.MANIFEST_NAME);
+						m.write(os);
+					} finally {
+						if (os != null) {
+							target.closeEntry();
+						}
+					}
+				}
+			} finally {
+				if (is != null)
+					is.close();
+				if (baos != null)
+					baos.close();
+				if (jis != null)
+					jis.close();
+			}
+		} else {
 			super.expand(source, target, context);
+		}
+	}
+
+	private void copyStreamToFile(InputStream is, OutputStream os, int bufsize)
+			throws IOException {
+		try {
+			byte[] b = new byte[bufsize];
+			int len = 0;
+			while ((len = is.read(b)) != -1) {
+				os.write(b, 0, len);
+			}
+		} finally {
+			if (is != null)
+				is.close();
 		}
 	}
 }
