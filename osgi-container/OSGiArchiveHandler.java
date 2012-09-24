@@ -56,61 +56,58 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URL;
-import java.net.URLConnection;
-import java.util.Enumeration;
-import java.util.Properties;
+import java.util.jar.Manifest;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
-import java.util.jar.Manifest;
+import java.util.*;
+import java.net.URL;
+import java.net.URLConnection;
 
 import javax.inject.Inject;
 
 /**
  * Archive Handler for OSGi modules.
- * 
+ *
  * @author Jerome Dochez
- * @author Tang Yong (tangyong@cn.fujitsu.com)
+ * @author TangYong(tangyong@cn.fujitsu.com)
  */
-@Service(name = OSGiArchiveDetector.OSGI_ARCHIVE_TYPE)
+@Service(name=OSGiArchiveDetector.OSGI_ARCHIVE_TYPE)
 @Singleton
-public class OSGiArchiveHandler extends GenericHandler implements
-		CompositeHandler {
+public class OSGiArchiveHandler extends GenericHandler implements CompositeHandler {
 
-	@Inject
-	private OSGiArchiveDetector detector;
+    @Inject
+    private OSGiArchiveDetector detector;
 
-	public String getArchiveType() {
-		return OSGiArchiveDetector.OSGI_ARCHIVE_TYPE;
-	}
+    public String getArchiveType() {
+        return OSGiArchiveDetector.OSGI_ARCHIVE_TYPE;
+    }
 
-	public boolean accept(ReadableArchive source, String entryName) {
-		// we hide everything so far.
-		return false;
-	}
+    public boolean accept(ReadableArchive source, String entryName) {
+        // we hide everything so far.
+        return false;
+    }
 
-	public void initCompositeMetaData(DeploymentContext context) {
-		// nothing to initialize
-	}
+    public void initCompositeMetaData(DeploymentContext context) {
+        // nothing to initialize
+    }
 
-	public boolean handles(ReadableArchive archive) throws IOException {
-		return detector.handles(archive);
-	}
+    public boolean handles(ReadableArchive archive) throws IOException {
+        return detector.handles(archive);
+    }
 
-	public ClassLoader getClassLoader(ClassLoader parent,
-			DeploymentContext context) {
-		return parent;
-	}
+    public ClassLoader getClassLoader(ClassLoader parent, DeploymentContext context) {
+        return parent;
+    }
 
-	public String getDefaultApplicationName(ReadableArchive archive,
-			DeploymentContext context) {
-		return getDefaultApplicationNameFromArchiveName(archive);
-	}
+    public String getDefaultApplicationName(ReadableArchive archive,
+        DeploymentContext context) {
+        return getDefaultApplicationNameFromArchiveName(archive);
+    }
 
-	/**
-	 * Override the expand method of base class(GenericHandler) in order to
+    /**
+	 * Overriding the expand method of base class(GenericHandler) in order to
 	 * support allowing wrapping of non-OSGi bundles when --type=osgi option is
-	 * used in deploy command or GUI.
+	 * used in deploy command or GUI. Pl. see [GLASSFISH-16651]
 	 * 
 	 * @param source
 	 *            of the expanding
@@ -129,13 +126,11 @@ public class OSGiArchiveHandler extends GenericHandler implements
 		if ((props != null) && (props.containsKey("uriScheme"))) {
 
 			// see [GLASSFISH-16651]
-			// if uriScheme is webbundle, we need to construct a new URL based
-			// on
-			// user's input and souce parameter and call openStream() on it.
+			// if uriScheme is webbundle, we need to construct a new URL based on user's input
+			// and souce parameter and call openConnection() and getInputStream() on it.
 			// user's input can be the following:
-			// asadmin deploy --properties
-			// uriScheme=webBundle:Bundle-SymbolicName=foo:
-			// Import-Package=javax.servlet:Web-ContextPath=/foo /tmp/foo.war
+			// asadmin deploy --properties uriScheme=webBundle:Bundle-SymbolicName=foo:
+			//                             Import-Package=javax.servlet:Web-ContextPath=/foo /tmp/foo.war
 			Enumeration<?> p = props.propertyNames();
 			StringBuilder sb = new StringBuilder();
 
